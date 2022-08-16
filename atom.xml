@@ -1,0 +1,397 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://dreamerforce.github.io/bonjour</id>
+    <title>Bonjour</title>
+    <updated>2022-08-16T06:21:26.958Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://dreamerforce.github.io/bonjour"/>
+    <link rel="self" href="https://dreamerforce.github.io/bonjour/atom.xml"/>
+    <subtitle>温故而知新</subtitle>
+    <logo>https://dreamerforce.github.io/bonjour/images/avatar.png</logo>
+    <icon>https://dreamerforce.github.io/bonjour/favicon.ico</icon>
+    <rights>All rights reserved 2022, Bonjour</rights>
+    <entry>
+        <title type="html"><![CDATA[Virtualbox+ubuntu20.04+k8s v1.24.3]]></title>
+        <id>https://dreamerforce.github.io/bonjour/post/virtualboxubuntu2004k8s-v1243/</id>
+        <link href="https://dreamerforce.github.io/bonjour/post/virtualboxubuntu2004k8s-v1243/">
+        </link>
+        <updated>2022-08-16T03:40:10.000Z</updated>
+        <content type="html"><![CDATA[<ul>
+<li>
+<p>Virtualbox网络设置</p>
+<p>虚拟机配置NatNetwork实现vm互通和外网访问， port forwarding实现主机到虚拟机的访问</p>
+</li>
+<li>
+<p>Ubuntu 20.04安装</p>
+<p>安装时输入科大源：<a href="http://mirrors.ustc.edu.cn/ubuntu/">http://mirrors.ustc.edu.cn/ubuntu/</a></p>
+<p>如何为Ubuntu设置代理：<a href="https://0xzx.com/2021030900161243285.html">https://0xzx.com/2021030900161243285.html</a></p>
+<p>克隆虚拟机：<a href="https://cloud.tencent.com/developer/article/1811590">https://cloud.tencent.com/developer/article/1811590</a></p>
+</li>
+<li>
+<p>kubeadm安装</p>
+<ul>
+<li>
+<p>检查网络适配器</p>
+<p>如果你有一个以上的网络适配器，同时你的 Kubernetes 组件通过默认路由不可达，我们建议你预先添加 IP 路由规则，<br>
+这样 Kubernetes 集群就可以通过对应的适配器完成连接。</p>
+</li>
+<li>
+<p><strong>允许 iptables 检查桥接流量</strong></p>
+<pre><code class="language-bash">cat &lt;&lt;EOF | sudo tee /etc/modules-load.d/k8s.conf
+br_netfilter
+EOF
+
+cat &lt;&lt;EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+sudo sysctl --system
+</code></pre>
+</li>
+<li>
+<p><strong>检查所需端口</strong></p>
+<p>启用这些<a href="https://kubernetes.io/zh-cn/docs/reference/ports-and-protocols/">必要的端口</a>后才能使 Kubernetes 的各组件相互通信。可以使用 netcat 之类的工具来检查端口是否启用，例如：</p>
+<pre><code class="language-bash">nc 127.0.0.1 6443
+</code></pre>
+</li>
+<li>
+<p>运行时安装(使用ubuntu科大源安装)</p>
+<ul>
+<li>
+<p>安装<strong>kubeadm、kubelet 和 kubectl</strong></p>
+<ol>
+<li>
+<p>更新 <code>apt</code> 包索引并安装使用 Kubernetes <code>apt</code> 仓库所需要的包：</p>
+<pre><code class="language-bash">sudo sed -i 's/archive.ubuntu.com/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
+sudo apt-get update -y
+sudo apt-get install -y apt-transport-https ca-certificates curl
+</code></pre>
+</li>
+<li>
+<p>下载公开签名秘钥(避免无法从google域名url下载)：</p>
+<pre><code class="language-bash">sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys  FEEA9169307EA071
+</code></pre>
+<blockquote>
+<p>如果没有添加kubernetes的签名，会报如下错误：<br>
+Err:5 http://mirrors.ustc.edu.cn/kubernetes/apt kubernetes-xenial InRelease<br>
+The following signatures couldn't be verified because the public key is not available: NO_PUBKEY FEEA9169307EA071 NO_PUBKEY 8B57C5C2836F4BEB<br>
+Reading package lists... Done<br>
+W: GPG error: http://mirrors.ustc.edu.cn/kubernetes/apt kubernetes-xenial InRelease: The following signatures couldn't be verified because the public key is not available: NO_PUBKEY FEEA9169307EA071 NO_PUBKEY 8B57C5C2836F4BEB<br>
+E: The repository 'http://mirrors.ustc.edu.cn/kubernetes/apt kubernetes-xenial InRelease' is not signed.<br>
+N: Updating from such a repository can't be done securely, and is therefore disabled by default.<br>
+N: See apt-secure(8) manpage for repository creation and user configuration details.</p>
+</blockquote>
+</li>
+<li>
+<p>添加 Kubernetes <code>apt</code> 仓库：</p>
+<pre><code class="language-bash">echo &quot;deb http://mirrors.ustc.edu.cn/kubernetes/apt/ kubernetes-xenial main&quot; | sudo tee /etc/apt/sources.list.d/kubernetes.list
+</code></pre>
+</li>
+<li>
+<p>更新 <code>apt</code> 包索引，安装 kubelet、kubeadm 和 kubectl，并锁定其版本：</p>
+<pre><code class="language-bash">sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+</code></pre>
+<blockquote>
+<p>kubelet 现在每隔几秒就会重启，因为它陷入了一个等待 kubeadm 指令的死循环，所以要hold</p>
+</blockquote>
+</li>
+</ol>
+</li>
+<li>
+<p>安装容器运行时</p>
+<ul>
+<li>
+<p>环境检查</p>
+<ul>
+<li>
+<p><strong>转发 IPv4 并让 iptables 看到桥接流量</strong></p>
+<p>通过运行 <code>lsmod | grep br_netfilter</code> 来验证 <code>br_netfilter</code> 模块是否已加载。若要显式加载此模块，请运行 <code>sudo modprobe br_netfilter</code>。</p>
+<p>为了让 Linux 节点的 iptables 能够正确查看桥接流量，请确认 <code>sysctl</code> 配置中的<code>net.bridge.bridge-nf-call-iptables</code> 设置为 1</p>
+<pre><code class="language-bash">cat &lt;&lt;EOF | sudo tee /etc/modules-load.d/k8s.conf
+overlay
+br_netfilter
+EOF
+
+sudo modprobe overlay
+sudo modprobe br_netfilter
+
+# 设置所需的 sysctl 参数，参数在重新启动后保持不变
+cat &lt;&lt;EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+EOF
+
+# 应用 sysctl 参数而不重新启动
+sudo sysctl --system
+</code></pre>
+</li>
+<li>
+<p>关闭swap/firewall</p>
+<pre><code class="language-bash">#firewall
+sudo ufw disable
+
+#Disable swap
+sudo sed -i '/swap/d' /etc/fstab
+sudo swapoff -a
+</code></pre>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>安装 Docker 以及 containerd.io()</strong><a href="https://docs.docker.com/engine/install/debian/">参考文档（Install Docker Engine on Debian）</a></p>
+<ol>
+<li>
+<p>更新 <code>apt</code> 包索引并安装使用 Docker <code>apt</code> 仓库所需要的包：</p>
+<pre><code class="language-bash">sudo apt-get update -y
+sudo apt-get install ca-certificates curl gnupg lsb-release
+</code></pre>
+</li>
+<li>
+<p>下载公开签名秘钥</p>
+<pre><code class="language-bash">sudo curl -fsSL https://mirrors.ustc.edu.cn/docker-ce/linux/ubuntu/gpg | sudo apt-key add -
+</code></pre>
+</li>
+<li>
+<p>添加 Docker <code>apt</code> 仓库</p>
+<pre><code class="language-bash">sudo add-apt-repository &quot;deb [arch=amd64] https://mirrors.ustc.edu.cn/docker-ce/linux/ubuntu $(lsb_release -cs) stable&quot;
+</code></pre>
+</li>
+<li>
+<p>安装 最新版 Docker 以及 <a href="http://containerd.io/">containerd.io</a>：</p>
+<pre><code class="language-bash">sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+</code></pre>
+</li>
+<li>
+<p>测试 Docker 的安装情况</p>
+<pre><code class="language-bash">sudo docker run hello-world
+</code></pre>
+<blockquote>
+<p>正确安装可以看到如下信息<br>
+Hello from Docker!<br>
+This message shows that your installation appears to be working correctly.</p>
+</blockquote>
+</li>
+</ol>
+</li>
+<li>
+<p>配置containerd</p>
+<ol>
+<li>
+<p>把apt生成的默认配置，用containerd的完整版默认配置覆盖掉。</p>
+<pre><code class="language-bash">sudo mkdir -p /etc/containerd
+containerd config default | sudo tee /etc/containerd/config.toml
+</code></pre>
+</li>
+<li>
+<p>配置 containerd ，让其使用systemd</p>
+<pre><code class="language-bash">sudo vim /etc/containerd/config.toml
+</code></pre>
+<blockquote>
+<p>在文件中找到这几行：</p>
+<p>[plugins.&quot;io.containerd.grpc.v1.cri&quot;.containerd.runtimes.runc.options]<br>
+<strong>SystemdCgroup = true  # &lt;----- 找到这一行，默认值是 false ，将它的值改为 true 。</strong></p>
+</blockquote>
+</li>
+<li>
+<p>国内用户，为了确保搭建成功，请为 containerd 添加代理</p>
+<pre><code class="language-bash">sudo vim /usr/lib/systemd/system/containerd.service
+</code></pre>
+<blockquote>
+<p>在 service 标签下，添加<br>
+Environment=&quot;HTTP_PROXY=http://xxx:port/&quot;<br>
+Environment=&quot;HTTPS_PROXY=http://xxx:port/&quot;<br>
+Environment=&quot;NO_PROXY=10.244.0.0/16,127.0.0.1,192.168.0.0/16,localhost,10.0.0.0/8,172.16.0.0/12&quot;</p>
+</blockquote>
+</li>
+<li>
+<p>重新启动 containerd 以应用新的配置。</p>
+<pre><code class="language-bash">sudo systemctl daemon-reload
+sudo systemctl restart containerd
+</code></pre>
+</li>
+</ol>
+</li>
+<li>
+<p>配置Docker</p>
+<p>在这个json中，可以配置</p>
+<pre><code class="language-bash">sudo mkdir /etc/docker
+cat &lt;&lt;EOF | sudo tee /etc/docker/daemon.json
+{
+  &quot;exec-opts&quot;: [&quot;native.cgroupdriver=systemd&quot;],
+  &quot;log-driver&quot;: &quot;json-file&quot;,
+  &quot;log-opts&quot;: {
+    &quot;max-size&quot;: &quot;100m&quot;
+  },
+  &quot;storage-driver&quot;: &quot;overlay2&quot;
+}
+EOF
+</code></pre>
+<p>重新启动 Docker 以应用配置</p>
+<pre><code class="language-bash">sudo systemctl enable docker
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+</code></pre>
+<p>配置用户权限，检查Docker状态</p>
+<pre><code class="language-bash">#add your user  to the Docker group , re-login is need to take effect
+sudo usermod -aG docker kadmin
+#检查docker用户组权限
+docker info
+</code></pre>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p>通过kubeadm配置kubelet</p>
+<ul>
+<li>
+<p><strong>配置主节点</strong></p>
+<pre><code class="language-bash">sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --image-repository='[registry.aliyuncs.com/google_containers](http://registry.cn-hangzhou.aliyuncs.com/google_containers)' --v=5
+</code></pre>
+<p>会看到类似如下信息：</p>
+<blockquote>
+<p>Your Kubernetes control-plane has initialized successfully!</p>
+</blockquote>
+<blockquote>
+<p>To start using your cluster, you need to run the following as a regular user:</p>
+</blockquote>
+<blockquote>
+<p>mkdir -p HOME/.kube<br>
+sudo cp -i /etc/kubernetes/admin.confHOME/.kube/config<br>
+sudo chown (id -u):(id -g) $HOME/.kube/config</p>
+</blockquote>
+<blockquote>
+<p>Alternatively, if you are the root user, you can run:</p>
+</blockquote>
+<blockquote>
+<p>export KUBECONFIG=/etc/kubernetes/admin.conf</p>
+</blockquote>
+<blockquote>
+<p>You should now deploy a pod network to the cluster.<br>
+Run &quot;kubectl apply -f [podnetwork].yaml&quot; with one of the options listed at:<br>
+<a href="https://kubernetes.io/docs/concepts/cluster-administration/addons/">https://kubernetes.io/docs/concepts/cluster-administration/addons/</a></p>
+</blockquote>
+<blockquote>
+<p>You can now join any number of control-plane nodes by copying certificate authorities<br>
+and service account keys on each node and then running the following as root:</p>
+</blockquote>
+<blockquote>
+<p>kubeadm join 10.0.2.4:6443 --token 54mhah.uni84dj5xa8lppyx <br>
+--discovery-token-ca-cert-hash sha256:c4ffea4783551e83de53e9e3d1855206cacebde5420bf1b4630a4a28394d3404 <br>
+--control-plane</p>
+</blockquote>
+<blockquote>
+<p><strong>Then you can join any number of worker nodes by running the following on each as root:</strong></p>
+</blockquote>
+<blockquote>
+<p><strong>kubeadm join 10.0.2.4:6443 --token 54mhah.uni84dj5xa8lppyx <br>
+--discovery-token-ca-cert-hash sha256:c4ffea4783551e83de53e9e3d1855206cacebde5420bf1b4630a4a28394d3404</strong></p>
+</blockquote>
+</li>
+<li>
+<p><strong>在主节点上安装 第三方pod网络模块(以下示例是flannel)</strong></p>
+<pre><code class="language-bash">wget [https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml](https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml)
+</code></pre>
+<p>如果你在初始化 k8s 的时候，pod网络通过参数 --pod-network-cidr=10.244.0.0/16 设置为 <code>10.244.0.0/16</code>，那么你可以直接运行命令了；<br>
+如果不一样，那么在该配置文件中，找到 <code>10.244.0.0/16</code>，并将它改成你当时设置的网络地址。<br>
+直接运行以下命令以安装pod网络插件</p>
+<pre><code class="language-bash">kubectl apply -f kube-flannel.yml
+</code></pre>
+</li>
+</ul>
+</li>
+<li>
+<p>添加worker节点</p>
+<p>在完成pod网络模块部署后，在工作节点上，以root身份执行如下操作，就可以加入其他工作节点：</p>
+<blockquote>
+<p>kubeadm join 10.0.2.4:6443 --token 54mhah.uni84dj5xa8lppyx <br>
+--discovery-token-ca-cert-hash sha256:c4ffea4783551e83de53e9e3d1855206cacebde5420bf1b4630a4a28394d3404</p>
+</blockquote>
+<p>也可以参考如下k8s官网说明</p>
+<p><a href="https://kubernetes.io/zh-cn/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/#join-nodes">使用 kubeadm 创建集群</a></p>
+</li>
+<li>
+<p>部署Nginx应用测试</p>
+<ol>
+<li>
+<p>创建部署</p>
+<pre><code class="language-bash">kubectl create deployment nginx --image=nginx
+</code></pre>
+</li>
+<li>
+<p>查看部署</p>
+<pre><code class="language-bash">kubectl describe deployment nginx
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://dreamerforce.github.io/bonjour/post-images/deploynginx.png" alt="deployment nginx" loading="lazy"></figure>
+</li>
+<li>
+<p>创建服务，service type为 nodeport，把nginx的80访问端口映射到container的80端口</p>
+<pre><code class="language-bash">kubectl create service nodeport nginx --tcp=80:80
+</code></pre>
+</li>
+<li>
+<p>查看服务</p>
+<figure data-type="image" tabindex="2"><img src="https://s3-us-west-2.amazonaws.com/secure.notion-static.com/465e4a89-bc83-43c5-887a-082fa4276c6a/Untitled.png" alt="Untitled" loading="lazy"></figure>
+</li>
+<li>
+<p>访问服务</p>
+<p>先确认container所在的node节点</p>
+<pre><code class="language-bash">kubectl get pods -o wide
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://s3-us-west-2.amazonaws.com/secure.notion-static.com/3dd15367-6568-4ebb-a57d-3de74ba31b9c/Untitled.png" alt="Untitled" loading="lazy"></figure>
+<pre><code class="language-bash">curl worker01:31897
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://s3-us-west-2.amazonaws.com/secure.notion-static.com/0e39bf2b-a515-4868-a537-060fba1c4eea/Untitled.png" alt="Untitled" loading="lazy"></figure>
+<p>由于环境使用的是Virtualbox虚拟机，配置的是NAT Network，利用它的port forwading功能，把worker01的31897端口映射到host本地的8080端口，就可以直接从本地浏览器访问了</p>
+<figure data-type="image" tabindex="5"><img src="https://dreamerforce.github.io/bonjour/post-images/portforward.png" alt="Untitled" loading="lazy"></figure>
+<figure data-type="image" tabindex="6"><img src="https://dreamerforce.github.io/bonjour/post-images/welcometonginx.png" alt="Untitled" loading="lazy"></figure>
+</li>
+</ol>
+</li>
+<li>
+<p>参考资料</p>
+<p><a href="https://www.moemona.com/2022/05/1016/">https://www.moemona.com/2022/05/1016/</a></p>
+</li>
+</ul>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Hello Gridea]]></title>
+        <id>https://dreamerforce.github.io/bonjour/post/hello-gridea/</id>
+        <link href="https://dreamerforce.github.io/bonjour/post/hello-gridea/">
+        </link>
+        <updated>2018-12-11T16:00:00.000Z</updated>
+        <summary type="html"><![CDATA[<p>👏  欢迎使用 <strong>Gridea</strong> ！<br>
+✍️  <strong>Gridea</strong> 一个静态博客写作客户端。你可以用它来记录你的生活、心情、知识、笔记、创意... ...</p>
+]]></summary>
+        <content type="html"><![CDATA[<p>👏  欢迎使用 <strong>Gridea</strong> ！<br>
+✍️  <strong>Gridea</strong> 一个静态博客写作客户端。你可以用它来记录你的生活、心情、知识、笔记、创意... ...</p>
+<!-- more -->
+<p><a href="https://github.com/getgridea/gridea">Github</a><br>
+<a href="https://gridea.dev/">Gridea 主页</a><br>
+<a href="https://fehey.com/">示例网站</a></p>
+<h2 id="特性">特性👇</h2>
+<p>📝  你可以使用最酷的 <strong>Markdown</strong> 语法，进行快速创作</p>
+<p>🌉  你可以给文章配上精美的封面图和在文章任意位置插入图片</p>
+<p>🏷️  你可以对文章进行标签分组</p>
+<p>📋  你可以自定义菜单，甚至可以创建外部链接菜单</p>
+<p>💻  你可以在 <strong>Windows</strong>，<strong>MacOS</strong> 或 <strong>Linux</strong> 设备上使用此客户端</p>
+<p>🌎  你可以使用 <strong>𝖦𝗂𝗍𝗁𝗎𝖻 𝖯𝖺𝗀𝖾𝗌</strong> 或 <strong>Coding Pages</strong> 向世界展示，未来将支持更多平台</p>
+<p>💬  你可以进行简单的配置，接入 <a href="https://github.com/gitalk/gitalk">Gitalk</a> 或 <a href="https://github.com/SukkaW/DisqusJS">DisqusJS</a> 评论系统</p>
+<p>🇬🇧  你可以使用<strong>中文简体</strong>或<strong>英语</strong></p>
+<p>🌁  你可以任意使用应用内默认主题或任意第三方主题，强大的主题自定义能力</p>
+<p>🖥  你可以自定义源文件夹，利用 OneDrive、百度网盘、iCloud、Dropbox 等进行多设备同步</p>
+<p>🌱 当然 <strong>Gridea</strong> 还很年轻，有很多不足，但请相信，它会不停向前 🏃</p>
+<p>未来，它一定会成为你离不开的伙伴</p>
+<p>尽情发挥你的才华吧！</p>
+<p>😘 Enjoy~</p>
+]]></content>
+    </entry>
+</feed>
